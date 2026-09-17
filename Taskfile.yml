@@ -1,0 +1,35 @@
+version: "3"
+
+tasks:
+  dev:desktop:
+    desc: "Watch build with auto-copy to Headlamp desktop plugins folder. Usage: task dev:desktop"
+    cmds:
+      - npm run start
+
+  mock:
+    desc: "Add ocm-mock to ~/.kube/config and start the mock API server on :9648. Usage: task mock"
+    cmds:
+      - kubectl config set-cluster ocm-mock --server=http://localhost:9648 --insecure-skip-tls-verify=true
+      - kubectl config set-credentials ocm-mock-user
+      - kubectl config set-context ocm-mock --cluster=ocm-mock --user=ocm-mock-user
+      - node mock-cluster/server.mjs
+
+  headlamp:
+    desc: "Open the Headlamp desktop app. Usage: task headlamp"
+    cmds:
+      - open -a Headlamp
+
+  install:
+    desc: Install dependencies
+    cmds:
+      - npm install
+
+  build:
+    desc: Build the plugin
+    cmds:
+      - npm run build
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - npm run test
