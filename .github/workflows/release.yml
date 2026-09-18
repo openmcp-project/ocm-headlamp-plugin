@@ -46,8 +46,10 @@ jobs:
           TEMPLATE="artifacthub/0.1.0/artifacthub-pkg.yml"
           PKGFILE="artifacthub/${SEMVER}/artifacthub-pkg.yml"
           mkdir -p "artifacthub/${SEMVER}"
-          cp "$TEMPLATE" "$PKGFILE"
-          [ -f "artifacthub/0.1.0/README.md" ] && cp "artifacthub/0.1.0/README.md" "artifacthub/${SEMVER}/README.md"
+          if [ "$TEMPLATE" != "$PKGFILE" ]; then
+            cp "$TEMPLATE" "$PKGFILE"
+            [ -f "artifacthub/0.1.0/README.md" ] && cp "artifacthub/0.1.0/README.md" "artifacthub/${SEMVER}/README.md"
+          fi
           sed -i "s|version: .*|version: ${SEMVER}|" "$PKGFILE"
           sed -i "s|https://github.com/openmcp-project/[^/]*/releases/download/[^/]*/[^ ]*\.tar\.gz|https://github.com/openmcp-project/ocm-headlamp-plugin/releases/download/${VERSION}/headlamp-ocm-${SEMVER}.tar.gz|g" "$PKGFILE"
           sed -i "s|sha256:.*|sha256:${CHECKSUM}|" "$PKGFILE"
