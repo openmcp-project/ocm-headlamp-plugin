@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version in semver format, e.g. v0.1.0'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Package plugin tar.gz for ArtifactHub
+        run: |
+          VERSION=${{ github.event.inputs.version }}
+          SEMVER=${VERSION#v}
+          mkdir -p package/headlamp-ocm
+          cp dist/main.js package/headlamp-ocm/main.js
+          cp package.json package/headlamp-ocm/package.json
+          tar -czf headlamp-ocm-${SEMVER}.tar.gz -C package headlamp-ocm
+          echo "TARBALL=headlamp-ocm-${SEMVER}.tar.gz" >> $GITHUB_ENV
+          echo "SEMVER=${SEMVER}" >> $GITHUB_ENV
+
+      - name: Write artifacthub-pkg.yml for this version
+        run: |
+          CHECKSUM=$(sha256sum ${{ env.TARBALL }} | awk '{print $1}')
+          SEMVER=${{ env.SEMVER }}
+          VERSION=${{ github.event.inputs.version }}
+          TEMPLATE="artifacthub/0.1.0/artifacthub-pkg.yml"
+          PKGFILE="artifacthub/${SEMVER}/artifacthub-pkg.yml"
+          mkdir -p "artifacthub/${SEMVER}"
+          cp "$TEMPLATE" "$PKGFILE"
+          [ -f "artifacthub/0.1.0/README.md" ] && cp "artifacthub/0.1.0/README.md" "artifacthub/${SEMVER}/README.md"
+          sed -i "s|version: .*|version: ${SEMVER}|" "$PKGFILE"
+          sed -i "s|https://github.com/openmcp-project/[^/]*/releases/download/[^/]*/[^ ]*\.tar\.gz|https://github.com/openmcp-project/ocm-headlamp-plugin/releases/download/${VERSION}/headlamp-ocm-${SEMVER}.tar.gz|g" "$PKGFILE"
+          sed -i "s|sha256:.*|sha256:${CHECKSUM}|" "$PKGFILE"
+          echo "PKGFILE=${PKGFILE}" >> $GITHUB_ENV
+
+      - name: Commit artifacthub-pkg.yml and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add artifacthub/
+          git diff --staged --quiet || git commit -m "chore: add artifacthub metadata for ${{ github.event.inputs.version }}"
+          git pull --rebase origin main
+          git tag ${{ github.event.inputs.version }}
+          git push origin HEAD:main --follow-tags
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          files: |
+            dist/main.js
+            ${{ env.TARBALL }}
+          generate_release_notes: true

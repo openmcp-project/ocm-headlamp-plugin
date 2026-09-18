@@ -1,0 +1,15 @@
+version: 0.1.0
+name: headlamp-ocm
+displayName: OCM
+createdAt: "2026-09-18T00:00:00Z"
+description: Open Component Model (OCM) plugin for Headlamp — visualizes the OCM delivery pipeline (Repositories, Components, Resources, Deployers) on any ControlPlane running the OCM controller.
+logoURL: "https://raw.githubusercontent.com/open-component-model/.github/main/branding/color/favicon-transparent.svg"
+changes:
+  - kind: added
+    description: "Initial release — OCM Overview with donut charts and delivery pipeline, list and detail views for Repository, Component, Resource, Deployer"
+annotations:
+  headlamp/plugin/archive-url: >-
+    https://github.com/openmcp-project/ocm-headlamp-plugin/releases/download/v0.1.0/headlamp-ocm-0.1.0.tar.gz
+  headlamp/plugin/archive-checksum: sha256:PLACEHOLDER
+  headlamp/plugin/version-compat: ">=0.22"
+  headlamp/plugin/distro-compat: in-cluster,web

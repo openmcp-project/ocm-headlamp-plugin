@@ -23,8 +23,8 @@ export class Repository extends makeKubeObject('Repository') {
 // Selects a component by name and semver constraint from a Repository.
 export class ComponentVersion extends makeKubeObject('ComponentVersion') {
   static apiVersion = 'delivery.ocm.software/v1alpha1';
-  static kind = 'ComponentVersion';
-  static apiName = 'componentversions';
+  static kind = 'Component';
+  static apiName = 'components';
   static isNamespaced = true;
 
   get spec(): any { return this.jsonData.spec; }
