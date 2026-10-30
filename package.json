@@ -22,7 +22,7 @@
   "type": "commonjs",
   "devDependencies": {
     "@kinvolk/headlamp-plugin": "0.13.1",
-    "@playwright/test": "^1.44.0",
+    "@playwright/test": "^1.63.0",
     "@testing-library/react": "^15.0.0",
     "@testing-library/user-event": "^14.6.7",
     "@types/react": "18.3.31",
