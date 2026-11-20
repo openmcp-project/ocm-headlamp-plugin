@@ -66,11 +66,16 @@ npm run build
 
 ## Release
 
-Trigger a release via the [GitHub Actions release workflow](../../actions/workflows/release.yml) by clicking **Run workflow** and entering the semver version (e.g. `v0.2.0`). The workflow:
+Trigger a release via the [GitHub Actions release workflow](../../actions/workflows/release.yml) by clicking **Run workflow**, selecting `main`, and entering a new semver version (e.g. `v0.2.0`). The workflow:
 
-- Creates a git tag
-- Builds the plugin and uploads `main.js` + a `headlamp-ocm-<version>.tar.gz` as GitHub Release assets
-- Updates `artifacthub/<version>/artifacthub-pkg.yml` with the correct checksum and commits it
+- Builds the plugin and packages `headlamp-ocm-<version>.tar.gz`
+- Writes Artifact Hub metadata with the current UTC date and archive checksum
+- Tags the commit used for the build and publishes `main.js` and the archive as GitHub Release assets
+- Opens a PR to `main` with the metadata and README in a commit signed by GitHub
+
+Review and merge the metadata PR to complete publication on Artifact Hub. The workflow uses the existing `GITHUB_TOKEN` and does not require a branch-rule bypass or an additional token. GitHub Actions must be allowed to create pull requests in the repository.
+
+Existing tags are rejected.
 
 Once published, the plugin is installable via Headlamp's plugin manager using its ArtifactHub URL.
 

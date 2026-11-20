@@ -12,9 +12,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
+    env:
+      VERSION: ${{ github.event.inputs.version }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Check release target
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Releases must be run from main."
+            exit 1
+          fi
+          if git show-ref --verify --quiet "refs/tags/${VERSION}"; then
+            echo "::error::Tag ${VERSION} already exists. Choose a new release version."
+            exit 1
+          fi
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
@@ -29,20 +45,17 @@ jobs:
 
       - name: Package plugin tar.gz for ArtifactHub
         run: |
-          VERSION=${{ github.event.inputs.version }}
           SEMVER=${VERSION#v}
           mkdir -p package/headlamp-ocm
           cp dist/main.js package/headlamp-ocm/main.js
           cp package.json package/headlamp-ocm/package.json
-          tar -czf headlamp-ocm-${SEMVER}.tar.gz -C package headlamp-ocm
-          echo "TARBALL=headlamp-ocm-${SEMVER}.tar.gz" >> $GITHUB_ENV
-          echo "SEMVER=${SEMVER}" >> $GITHUB_ENV
+          tar -czf "headlamp-ocm-${SEMVER}.tar.gz" -C package headlamp-ocm
+          echo "TARBALL=headlamp-ocm-${SEMVER}.tar.gz" >> "$GITHUB_ENV"
+          echo "SEMVER=${SEMVER}" >> "$GITHUB_ENV"
 
       - name: Write artifacthub-pkg.yml for this version
         run: |
-          CHECKSUM=$(sha256sum ${{ env.TARBALL }} | awk '{print $1}')
-          SEMVER=${{ env.SEMVER }}
-          VERSION=${{ github.event.inputs.version }}
+          CHECKSUM=$(sha256sum "${TARBALL}" | awk '{print $1}')
           TEMPLATE="artifacthub/0.1.0/artifacthub-pkg.yml"
           PKGFILE="artifacthub/${SEMVER}/artifacthub-pkg.yml"
           mkdir -p "artifacthub/${SEMVER}"
@@ -51,25 +64,53 @@ jobs:
             [ -f "artifacthub/0.1.0/README.md" ] && cp "artifacthub/0.1.0/README.md" "artifacthub/${SEMVER}/README.md"
           fi
           sed -i "s|version: .*|version: ${SEMVER}|" "$PKGFILE"
+          sed -i "s|^createdAt: .*|createdAt: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"|" "$PKGFILE"
           sed -i "s|https://github.com/openmcp-project/[^/]*/releases/download/[^/]*/[^ ]*\.tar\.gz|https://github.com/openmcp-project/ocm-headlamp-plugin/releases/download/${VERSION}/headlamp-ocm-${SEMVER}.tar.gz|g" "$PKGFILE"
           sed -i "s|sha256:.*|sha256:${CHECKSUM}|" "$PKGFILE"
-          echo "PKGFILE=${PKGFILE}" >> $GITHUB_ENV
-
-      - name: Commit artifacthub-pkg.yml and tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add artifacthub/
-          git diff --staged --quiet || git commit -m "chore: add artifacthub metadata for ${{ github.event.inputs.version }}"
-          git pull --rebase origin main
-          git tag ${{ github.event.inputs.version }}
-          git push origin HEAD:main --follow-tags
+          echo "PKGFILE=${PKGFILE}" >> "$GITHUB_ENV"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ github.event.inputs.version }}
+          target_commitish: ${{ github.sha }}
           files: |
             dist/main.js
             ${{ env.TARBALL }}
           generate_release_notes: true
+
+      - name: Open PR with signed Artifact Hub metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="chore/artifacthub-${VERSION}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/heads/${BRANCH}" \
+            -f sha="${GITHUB_SHA}"
+          # GitHub signs API-created commits, satisfying the organization's signature rule.
+          jq -n \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            --arg branch "${BRANCH}" \
+            --arg oid "${GITHUB_SHA}" \
+            --arg message "chore: add artifacthub metadata for ${VERSION}" \
+            --arg pkgPath "${PKGFILE}" \
+            --arg readmePath "artifacthub/${SEMVER}/README.md" \
+            --rawfile pkg "${PKGFILE}" \
+            --rawfile readme "artifacthub/${SEMVER}/README.md" \
+            '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {input: {
+                branch: {repositoryNameWithOwner: $repository, branchName: $branch},
+                expectedHeadOid: $oid,
+                message: {headline: $message},
+                fileChanges: {additions: [
+                  {path: $pkgPath, contents: ($pkg | @base64)},
+                  {path: $readmePath, contents: ($readme | @base64)}
+                ]}
+              }}
+            }' | gh api graphql --input -
+          gh pr create \
+            --title "chore: add artifacthub metadata for ${VERSION}" \
+            --body "Automated PR created by the release workflow for ${VERSION}. Merge to complete the Artifact Hub publish." \
+            --base main \
+            --head "${BRANCH}"
